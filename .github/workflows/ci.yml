@@ -29,15 +29,17 @@ jobs:
 
       - name: Unit tests
         run: |
-          godot --headless -s res://tests/test_main.gd 2>&1 | tee test.log
+          godot --headless -s res://tests/test_game.gd 2>&1 | tee test.log
           # Godot can print script errors without failing the exit code, so grep too.
           if grep -E "SCRIPT ERROR|Parse Error|FAIL:" test.log; then exit 1; fi
-          grep -q "0 failure(s)" test.log
+          grep -q "^0 failure(s)" test.log
 
-      - name: Smoke test (run the game headless for ~10s)
+      - name: Smoke test (bot plays 90s of game time)
         run: |
-          godot --headless --quit-after 600 2>&1 | tee smoke.log
+          godot --headless --fixed-fps 60 --quit-after 5400 -- --bot 2>&1 | tee smoke.log
           if grep -E "SCRIPT ERROR|Parse Error|ERROR:" smoke.log; then exit 1; fi
+          # The bot must have levelled up and picked cards at least 3 times.
+          test "$(grep -c '\[bot\].*picked' smoke.log)" -ge 3
 
   export:
     name: Export ${{ matrix.preset }}
@@ -52,10 +54,10 @@ jobs:
             out: build/web/index.html
             dir: build/web
           - preset: Linux
-            out: build/linux/block-dodge.x86_64
+            out: build/linux/hundred-demons.x86_64
             dir: build/linux
           - preset: Windows
-            out: build/windows/block-dodge.exe
+            out: build/windows/hundred-demons.exe
             dir: build/windows
     steps:
       - uses: actions/checkout@v7
@@ -78,7 +80,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: block-dodge-${{ matrix.preset }}
+          name: hundred-demons-${{ matrix.preset }}
           path: ${{ matrix.dir }}
           if-no-files-found: error
 
@@ -96,7 +98,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: block-dodge-Web
+          name: hundred-demons-Web
           path: web
 
       - uses: actions/upload-pages-artifact@v5
