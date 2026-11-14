@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     container: barichello/godot-ci:4.3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Import project
         run: godot --headless --import
@@ -58,7 +58,7 @@ jobs:
             out: build/windows/block-dodge.exe
             dir: build/windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install export templates
         run: |
@@ -76,7 +76,7 @@ jobs:
           ls -la ${{ matrix.dir }}
           test -n "$(ls -A ${{ matrix.dir }})"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: block-dodge-${{ matrix.preset }}
           path: ${{ matrix.dir }}
@@ -94,14 +94,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: block-dodge-Web
           path: web
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: web
 
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
