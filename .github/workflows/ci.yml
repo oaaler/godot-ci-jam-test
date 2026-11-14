@@ -1,0 +1,107 @@
+name: Build, Test & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import project
+        run: godot --headless --import
+
+      - name: Unit tests
+        run: |
+          godot --headless -s res://tests/test_main.gd 2>&1 | tee test.log
+          # Godot can print script errors without failing the exit code, so grep too.
+          if grep -E "SCRIPT ERROR|Parse Error|FAIL:" test.log; then exit 1; fi
+          grep -q "0 failure(s)" test.log
+
+      - name: Smoke test (run the game headless for ~10s)
+        run: |
+          godot --headless --quit-after 600 2>&1 | tee smoke.log
+          if grep -E "SCRIPT ERROR|Parse Error|ERROR:" smoke.log; then exit 1; fi
+
+  export:
+    name: Export ${{ matrix.preset }}
+    needs: test
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.3
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: Web
+            out: build/web/index.html
+            dir: build/web
+          - preset: Linux
+            out: build/linux/block-dodge.x86_64
+            dir: build/linux
+          - preset: Windows
+            out: build/windows/block-dodge.exe
+            dir: build/windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install export templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable \
+             ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Import project
+        run: godot --headless --import
+
+      - name: Export
+        run: |
+          mkdir -p ${{ matrix.dir }}
+          godot --headless --export-release "${{ matrix.preset }}" ${{ matrix.out }}
+          ls -la ${{ matrix.dir }}
+          test -n "$(ls -A ${{ matrix.dir }})"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: block-dodge-${{ matrix.preset }}
+          path: ${{ matrix.dir }}
+          if-no-files-found: error
+
+  deploy-pages:
+    name: Deploy web build to GitHub Pages
+    needs: export
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: block-dodge-Web
+          path: web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
